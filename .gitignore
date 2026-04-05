@@ -1,0 +1,11 @@
+.claude/
+.pytest_cache/
+.ruff_cache/
+.env
+CLAUDE.md
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd

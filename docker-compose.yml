@@ -1,0 +1,58 @@
+version: "3.9"
+
+networks:
+  edan-net:
+    driver: bridge
+
+volumes:
+  edan-data:
+
+services:
+  ingestion:
+    build: .
+    command: python scripts/ingest.py
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+    networks:
+      - edan-net
+
+  api:
+    build: .
+    command: uvicorn src.api.main:app --host 0.0.0.0 --port 8090 --reload
+    ports:
+      - "${FASTAPI_PORT:-8090}:8090"
+    volumes:
+      - ./data:/app/data
+      - ./src:/app/src
+    env_file:
+      - .env
+    depends_on:
+      ingestion:
+        condition: service_completed_successfully
+    networks:
+      - edan-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    command: streamlit run src/app/streamlit_app.py --server.port 8501 --server.address 0.0.0.0
+    ports:
+      - "${STREAMLIT_PORT:-8501}:8501"
+    volumes:
+      - ./data:/app/data
+      - ./src:/app/src
+    env_file:
+      - .env
+    environment:
+      - FASTAPI_URL=http://api:8090
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - edan-net
