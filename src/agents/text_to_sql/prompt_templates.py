@@ -6,9 +6,10 @@ SCHEMA_DESCRIPTION = """
 | Question type | Scope | Vue à utiliser |
 |--------------|-------|----------------|
 | "Combien de sièges a le RHDP ?" | National (parti) | `vw_results_by_party` |
-| "Quel parti a gagné à Abidjan ?" | Région → parti | `vw_party_scores_by_region` |
-| "Classement des partis dans la région X" | Région → parti | `vw_party_scores_by_region` |
-| "Qui a gagné dans la circonscription 5 ?" | Circonscription | `vw_winners` ou `vw_results_by_circonscription` |
+| "Classement des partis dans la RÉGION X" | Région → parti | `vw_party_scores_by_region` |
+| "Quel parti domine la région AGNEBY-TIASSA ?" | Région → parti | `vw_party_scores_by_region` |
+| "Quel parti a gagné à Tiapoum/Agboville/[ville] ?" | Circonscription → parti | `results` GROUP BY parti WHERE circonscription ILIKE '%X%' |
+| "Qui a gagné dans la circonscription 5 ?" | Circonscription → élu | `vw_winners` ou `vw_results_by_circonscription` |
 | "Classement des candidats dans la circo X" | Circo → candidat | `vw_candidates_ranked_by_circonscription` |
 | "Taux de participation par région" | Régions | `vw_results_by_region` |
 | "Taux de participation dans la circo X" | Circonscription | `vw_turnout` |
@@ -18,7 +19,10 @@ SCHEMA_DESCRIPTION = """
 | "Marge de victoire dans la circo X" | Circonscription | `vw_results_by_circonscription` |
 | "Abstention dans la circo X" | Circonscription | `vw_turnout` |
 
-⚠️ RÈGLE FONDAMENTALE : `vw_results_by_party` est NATIONAL — elle n'a PAS de colonne `region`. Pour toute question sur un parti DANS une région ou une ville → utiliser `vw_party_scores_by_region`.
+⚠️ RÈGLES CRITIQUES SUR LE SCOPE :
+1. `vw_results_by_party` est NATIONAL — elle n'a PAS de colonne `region`. Pour un parti dans une région → `vw_party_scores_by_region`.
+2. `vw_party_scores_by_region` groupe par RÉGION administrative (ex: "AGNEBY-TIASSA", "ABIDJAN") — elle N'A PAS de colonne `circonscription`. Pour un parti dans une CIRCONSCRIPTION (ville, commune, sous-préfecture) → utiliser `results` avec GROUP BY parti WHERE circonscription ILIKE '%X%'.
+3. Si tu ne sais pas si X est une région ou une circonscription → utiliser `results` directement (table la plus complète).
 
 ---
 
@@ -45,6 +49,7 @@ SCHEMA_DESCRIPTION = """
 | elu | BOOLEAN | TRUE si élu | TRUE, FALSE |
 
 ### Table `summary_national` — 1 seule ligne (totaux nationaux)
+⚠️ Les colonnes s'appellent `inscrits` et `votants` (PAS `total_inscrits` ni `total_votants` — ces noms n'existent pas dans cette table).
 | Colonne | Type | Valeur connue |
 |---------|------|---------------|
 | nb_bureaux_vote | INTEGER | 25338 |
@@ -137,6 +142,7 @@ Usage: "qui était 2ème dans la circonscription X", "candidats les mieux placé
 5. Préférer les vues précalculées quand possible (évite les erreurs d'agrégation)
 6. Ne jamais inventer de colonnes ou tables
 7. `vw_winners` n'a PAS de colonne `elu` — ne jamais écrire `SELECT elu FROM vw_winners` ni `WHERE elu = ...` sur cette vue
+8. `summary_national` a `inscrits` et `votants` — jamais `total_inscrits` ni `total_votants` (ces colonnes n'existent pas dans cette table)
 
 ## Exemples de requêtes valides
 ```sql
@@ -175,6 +181,9 @@ FROM vw_winners WHERE numero_circonscription = 1;
 
 -- Taux national de participation / abstention
 SELECT taux_participation, taux_abstention FROM summary_national;
+
+-- Nombre total d'électeurs inscrits (colonne = inscrits, PAS total_inscrits)
+SELECT inscrits, votants FROM summary_national LIMIT 1;
 
 -- Partis représentés au niveau national
 SELECT parti, nb_sieges, nb_candidats

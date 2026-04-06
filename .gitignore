@@ -9,3 +9,11 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+
+# Données générées (make ingest)
+data/processed/edan.duckdb
+data/processed/chroma/
+data/processed/.data_version
+
+# Traces & rapports runtime
+data/traces/

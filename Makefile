@@ -1,4 +1,4 @@
-.PHONY: help install ingest run run-streamlit run-api stop test test-security eval lint format clean docker-build docker-up docker-down docker-logs validate-data trace-report
+.PHONY: help install ingest run run-streamlit run-api stop stop-local test test-security eval eval-level eval-report eval-baseline regression-check trace-report lint format validate-data clean docker-build docker-up docker-restart docker-reingest docker-down docker-logs
 
 help: ## Afficher l'aide
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -31,16 +31,23 @@ test-security: ## Lancer les tests de sécurité (adversarial prompts)
 	pytest tests/test_adversarial.py -v
 
 eval: ## Lancer la suite d'évaluation offline Level 4 (requiert OPENROUTER_API_KEY)
-	PYTHONPATH=. python tests/eval/eval_suite.py --verbose
+	PYTHONPATH=. python3 tests/eval/eval_suite.py --verbose
 
 eval-level: ## Évaluer un niveau spécifique (ex: make eval-level LEVEL=1)
-	PYTHONPATH=. python tests/eval/eval_suite.py --level $(LEVEL) --verbose
+	PYTHONPATH=. python3 tests/eval/eval_suite.py --level $(LEVEL) --verbose
 
 eval-report: ## Évaluer et sauvegarder le rapport JSON
-	PYTHONPATH=. python tests/eval/eval_suite.py --output data/traces/eval_report.json
+	PYTHONPATH=. python3 tests/eval/eval_suite.py --output data/traces/eval_report.json
+
+eval-baseline: ## Sauvegarder le rapport d'évaluation courant comme baseline
+	PYTHONPATH=. python3 tests/eval/eval_suite.py --output tests/eval/baseline_report.json
+	@echo "Baseline sauvegardé dans tests/eval/baseline_report.json"
+
+regression-check: ## Comparer l'évaluation courante au baseline (requiert make eval-report d'abord)
+	PYTHONPATH=. python3 scripts/regression_check.py
 
 trace-report: ## Afficher le rapport des traces (activer avec ENABLE_TRACING=true dans .env)
-	PYTHONPATH=. python scripts/trace_report.py
+	PYTHONPATH=. python3 scripts/trace_report.py
 
 lint: ## Vérifier la qualité du code
 	ruff check src/ tests/ scripts/

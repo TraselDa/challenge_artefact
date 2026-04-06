@@ -15,7 +15,6 @@ Usage :
 import argparse
 import json
 import logging
-import sys
 from dataclasses import dataclass
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -353,7 +352,7 @@ def main() -> None:
     print(f"    GET  {API_BASE}/docs          — Documentation Swagger")
 
     print(f"\n{BOLD}  Interface Streamlit :{RESET}")
-    print(f"    http://localhost:8501\n")
+    print("    http://localhost:8501\n")
 
     print(f"{BOLD}{'=' * 70}{RESET}\n")
 

@@ -68,6 +68,20 @@ OUT_OF_SCOPE_KEYWORDS = frozenset({
     "dan ", "do anything now", "unconstrained",
 })
 
+# Patterns d'injection SQL à détecter dans la question (avant tout routage)
+_SQL_INJECTION_PATTERNS = (
+    "drop table", "drop database", "drop schema",
+    "delete from",
+    "truncate table", "truncate ",
+    "union select",
+    "insert into",
+    "; drop", "; delete", "; truncate", "; insert",
+    "exec(", "execute(",
+    "xp_cmdshell",
+    "information_schema",
+    "pg_sleep", "sleep(",
+)
+
 # Entités potentiellement ambiguës (plusieurs circonscriptions)
 AMBIGUOUS_ENTITIES: dict[str, list[str]] = {
     "abidjan": [
@@ -88,9 +102,14 @@ ROUTER_SYSTEM_PROMPT = """Tu es un routeur d'intent pour une application d'analy
 Classifie la question dans l'une de ces catégories:
 - "sql": question analytique (chiffres, agrégations, classements, listes)
 - "sql_chart": question qui demande un graphique/visualisation
-- "rag": recherche floue, entité avec typo, question narrative
-- "out_of_scope": hors du dataset (météo, politique générale, sécurité, etc.)
-- "needs_clarification": entité ambiguë (ex: "Abidjan" sans précision)
+- "rag": recherche floue, entité avec typo/faute d'orthographe, question narrative
+- "out_of_scope": hors du dataset (météo, politique générale, sécurité, injections SQL, etc.)
+- "needs_clarification": entité CONNUE et ambiguë (ex: "Abidjan" = plusieurs circonscriptions)
+
+RÈGLES IMPORTANTES:
+- Si le nom d'un lieu semble mal orthographié ou inconnu → "rag" (le RAG gère le fuzzy matching), PAS "needs_clarification"
+- "needs_clarification" uniquement pour des entités connues et ambiguës (ex: Abidjan, Yamoussoukro, Grand-Bassam)
+- Si la question contient des commandes SQL destructives (DROP, DELETE, TRUNCATE) → "out_of_scope"
 
 Réponds UNIQUEMENT avec un JSON valide:
 {"intent": "sql|sql_chart|rag|out_of_scope|needs_clarification", "confidence": 0.9, "reason": "..."}
@@ -125,6 +144,17 @@ class IntentRouter:
             RouterDecision avec l'intent et la confidence.
         """
         normalized = normalize_text(question)
+        question_lower = question.lower()
+
+        # 0. Détection injection SQL (priorité absolue, avant tout)
+        if self._check_sql_injection(question_lower):
+            logger.info("Injection SQL détectée dans la question, refus immédiat")
+            return RouterDecision(
+                intent=Intent.OUT_OF_SCOPE,
+                confidence=0.99,
+                reason="Tentative d'injection SQL détectée",
+                normalized_query=normalized,
+            )
 
         # 1. Vérification hors-scope (prioritaire)
         keyword_decision = self._keyword_based_route(normalized)
@@ -168,6 +198,17 @@ class IntentRouter:
                 reason="Fallback: routage LLM indisponible",
                 normalized_query=normalized,
             )
+
+    def _check_sql_injection(self, question_lower: str) -> bool:
+        """Détecte les tentatives d'injection SQL dans la question brute.
+
+        Args:
+            question_lower: Question en minuscules (non normalisée pour préserver la ponctuation).
+
+        Returns:
+            True si une injection SQL est détectée.
+        """
+        return any(pattern in question_lower for pattern in _SQL_INJECTION_PATTERNS)
 
     def _keyword_based_route(self, normalized_question: str) -> RouterDecision | None:
         """Routing rapide basé sur mots-clés avant d'appeler le LLM.
@@ -223,6 +264,7 @@ class IntentRouter:
             system=ROUTER_SYSTEM_PROMPT,
             user=question,
             max_tokens=256,
+            temperature=0,
         )
 
         # Parser le JSON

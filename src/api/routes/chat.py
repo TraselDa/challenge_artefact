@@ -10,6 +10,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from src.agents.router import Intent
+from src.llm_client import get_token_usage, init_token_counter
+from src.observability.tracer import new_tracer
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["chat"])
@@ -94,6 +96,9 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
     start = time.time()
     question = request.question.strip()
+    _trace_id = uuid.uuid4().hex[:8]
+    _tracer = new_tracer(_trace_id, request.question, session_id=request.session_id)
+    init_token_counter()
 
     logger.info("Question [session=%s]: %s", request.session_id, question)
 
@@ -142,7 +147,9 @@ async def chat(request: ChatRequest) -> ChatResponse:
         if router_agent is None:
             raise HTTPException(status_code=503, detail="Agents non initialisés.")
 
+        _t0 = time.time()
         routing = router_agent.route(question)
+        _tracer.record("routing", (time.time() - _t0) * 1000, intent=routing.intent.value, confidence=routing.confidence)
         intent = routing.intent
         logger.info("Intent: %s (confidence=%.2f)", intent, routing.confidence)
 
@@ -163,7 +170,9 @@ async def chat(request: ChatRequest) -> ChatResponse:
             if entities_substituted:
                 sql_agent = app_state.get("sql_agent")
                 if sql_agent:
+                    _t0 = time.time()
                     result = sql_agent.answer(question)
+                    _tracer.record("sql_agent", (time.time() - _t0) * 1000, sql_ok=result.sql is not None, error=result.error)
                     answer = result.answer
                     sql = result.sql
                     provenance = result.provenance
@@ -201,7 +210,9 @@ async def chat(request: ChatRequest) -> ChatResponse:
                         # 0 ou 1 seul match — passer directement au SQL
                         sql_agent = app_state.get("sql_agent")
                         if sql_agent:
+                            _t0 = time.time()
                             result = sql_agent.answer(question)
+                            _tracer.record("sql_agent", (time.time() - _t0) * 1000, sql_ok=result.sql is not None, error=result.error)
                             answer = result.answer
                             sql = result.sql
                             provenance = result.provenance
@@ -221,7 +232,9 @@ async def chat(request: ChatRequest) -> ChatResponse:
             if sql_agent is None:
                 raise HTTPException(status_code=503, detail="Agent SQL non disponible.")
 
+            _t0 = time.time()
             result = sql_agent.answer(question)
+            _tracer.record("sql_agent", (time.time() - _t0) * 1000, sql_ok=result.sql is not None, error=result.error)
             answer = result.answer
             sql = result.sql
             provenance = result.provenance
@@ -231,7 +244,9 @@ async def chat(request: ChatRequest) -> ChatResponse:
             if intent == Intent.SQL_CHART and result.sql_result and result.sql_result.results:
                 try:
                     if result.chart_config:
+                        _t0 = time.time()
                         fig = generate_chart(result.sql_result.results, result.chart_config)
+                        _tracer.record("chart_gen", (time.time() - _t0) * 1000, chart_type=result.chart_config.chart_type)
                         if fig is not None:
                             chart = ChartData(
                                 chart_json=chart_to_json(fig),
@@ -246,7 +261,9 @@ async def chat(request: ChatRequest) -> ChatResponse:
             if rag_agent is None:
                 raise HTTPException(status_code=503, detail="Agent RAG non disponible.")
 
+            _t0 = time.time()
             result = rag_agent.answer(question, routing.normalized_query)
+            _tracer.record("rag_retrieval", (time.time() - _t0) * 1000, docs_count=len(result.retrieved_docs), confidence=result.confidence)
             answer = result.answer
             sources = result.sources
             provenance = result.provenance
@@ -255,7 +272,9 @@ async def chat(request: ChatRequest) -> ChatResponse:
             # Fallback RAG
             rag_agent = app_state.get("rag_agent")
             if rag_agent:
+                _t0 = time.time()
                 result = rag_agent.answer(question)
+                _tracer.record("rag_retrieval", (time.time() - _t0) * 1000, docs_count=len(result.retrieved_docs), confidence=result.confidence)
                 answer = result.answer
                 sources = result.sources
                 provenance = result.provenance
@@ -267,16 +286,11 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
         # ── Tracing optionnel (no-op si ENABLE_TRACING non défini) ───────────
         try:
-            from src.observability.tracer import new_tracer as _new_tracer
-            _tracer = _new_tracer(
-                uuid.uuid4().hex[:8],
-                request.question,
-                session_id=request.session_id,
-            )
             _tracer.flush(
                 intent=intent.value,
                 total_latency_ms=latency_ms,
                 sql=sql,
+                tokens=get_token_usage(),
             )
         except Exception:
             pass

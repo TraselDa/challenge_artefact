@@ -50,6 +50,7 @@ class Trace:
     sql: str | None = None
     error: str | None = None
     session_id: str | None = None
+    tokens: dict[str, int] | None = None
 
 
 class Tracer:
@@ -87,6 +88,7 @@ class Tracer:
         total_latency_ms: float,
         sql: str | None = None,
         error: str | None = None,
+        tokens: dict[str, int] | None = None,
     ) -> None:
         """Écrit la trace en JSONL. Ne lève jamais d'exception."""
         if not _ENABLED:
@@ -102,6 +104,7 @@ class Tracer:
                 sql=sql,
                 error=error,
                 session_id=self._session_id,
+                tokens=tokens,
             )
             _TRACES_DIR.mkdir(parents=True, exist_ok=True)
             with open(_TRACES_FILE, "a", encoding="utf-8") as f:

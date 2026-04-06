@@ -247,8 +247,9 @@ class TestRAGIntegration:
     @pytest.fixture(scope="class")
     def retriever(self):
         import chromadb
-        from src.agents.rag.indexer import get_or_create_collection
+
         import src.agents.rag.retriever as _retriever_module
+        from src.agents.rag.indexer import get_or_create_collection
 
         class _RetrieverWrapper:
             def __init__(self, chroma_dir: str) -> None:

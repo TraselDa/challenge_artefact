@@ -8,9 +8,12 @@ Usage:
 """
 
 import argparse
+import hashlib
+import json
 import logging
 import os
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 # Ajouter le répertoire racine au path
@@ -79,7 +82,13 @@ def main() -> None:
 
     # 4. Connexion DuckDB et création du schéma
     logger.info("\n[3/5] Création du schéma DuckDB...")
-    from src.ingestion.loader import create_schema, create_views, get_connection, load_results, load_summary_national
+    from src.ingestion.loader import (
+        create_schema,
+        create_views,
+        get_connection,
+        load_results,
+        load_summary_national,
+    )
 
     conn = get_connection(db_path, read_only=False)
     create_schema(conn)
@@ -102,6 +111,20 @@ def main() -> None:
     if not report.passed:
         logger.error("\n❌ Ingestion terminée avec des erreurs. Vérifiez les logs ci-dessus.")
         sys.exit(1)
+
+    # 5b. Écriture du fichier de version
+    from src.agents.rag.indexer import EMBEDDING_MODEL
+    pdf_hash = hashlib.sha256(pdf_path.read_bytes()).hexdigest()
+    version_info = {
+        "pdf_hash": pdf_hash,
+        "ingest_timestamp": datetime.now(UTC).isoformat(),
+        "embedding_model": EMBEDDING_MODEL,
+        "schema_version": "1.0",
+        "pdf_path": str(pdf_path),
+    }
+    version_path = db_path.parent / ".data_version"
+    version_path.write_text(json.dumps(version_info, indent=2, ensure_ascii=False))
+    logger.info("Version dataset: hash=%s...", pdf_hash[:12])
 
     # 7. Reconstruction de l'index ChromaDB (force_rebuild=True car le schéma DuckDB a changé)
     chroma_path = os.getenv("CHROMA_PERSIST_DIR", "data/processed/chroma")

@@ -46,6 +46,11 @@ def search(
     Returns:
         Liste de RAGResult triés par pertinence.
     """
+    from src.cache import get_retrieval_cached, set_retrieval_cached
+    cached = get_retrieval_cached(query, n_results)
+    if cached is not None:
+        return cached
+
     try:
         results = collection.query(
             query_texts=[query],
@@ -77,6 +82,7 @@ def search(
         )
 
     logger.debug(f"Recherche RAG '{query}': {len(rag_results)} résultats")
+    set_retrieval_cached(query, n_results, rag_results)
     return rag_results
 
 

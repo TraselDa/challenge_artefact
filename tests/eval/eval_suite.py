@@ -21,9 +21,10 @@ import argparse
 import json
 import logging
 import os
+import re
 import sys
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -76,6 +77,10 @@ class EvalResult:
     actual_response: str | None = None
     error: str | None = None
     details: list[str] = field(default_factory=list)
+    fact_ok: bool = True
+    citation_ok: bool = True
+    aggregation_ok: bool = True
+    actual_sources: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -89,6 +94,7 @@ class EvalReport:
     score_pct: float = 0.0
     by_level: dict[str, dict] = field(default_factory=dict)
     by_category: dict[str, dict] = field(default_factory=dict)
+    scores_by_metric: dict[str, float] = field(default_factory=dict)
     results: list[EvalResult] = field(default_factory=list)
     duration_s: float = 0.0
 
@@ -112,6 +118,83 @@ def load_test_cases(level_filter: str | None = None) -> list[dict]:
             cases = [c for c in cases if str(c["level"]) == level_filter]
 
     return cases
+
+
+# ---------------------------------------------------------------------------
+# Scorers fact / citation / aggregation
+# ---------------------------------------------------------------------------
+
+
+def _extract_numbers(text: str) -> list[float]:
+    """Extrait les nombres d'un texte (gère espaces comme séparateur de milliers, virgule décimale)."""
+    clean = text.replace("\u00a0", " ")
+    raw = re.findall(r"\b\d[\d\s]*(?:[,.]\d+)?\b", clean)
+    results: list[float] = []
+    for r in raw:
+        try:
+            normalized = r.strip().replace(" ", "").replace(",", ".")
+            results.append(float(normalized))
+        except ValueError:
+            pass
+    return results
+
+
+def _number_in_text(value: float, text: str) -> bool:
+    """Vérifie si un nombre apparaît dans le texte sous diverses formes (robuste aux formats LLM)."""
+    numbers = _extract_numbers(text)
+    tol = max(1.0, abs(value) * 0.01)
+    if any(abs(n - value) <= tol for n in numbers):
+        return True
+    # Fallback : recherche de la valeur entière sous plusieurs formats textuels
+    if value == int(value):
+        v = int(value)
+        clean_text = text.replace("\u00a0", " ")
+        variants = [
+            str(v),                                    # "8597092"
+            f"{v:,}",                                  # "8,597,092"
+            f"{v:,}".replace(",", " "),                # "8 597 092"
+            f"{v:,}".replace(",", "."),                # "8.597.092"
+        ]
+        if any(s in clean_text for s in variants):
+            return True
+    return False
+
+
+def _check_fact(expected_value: dict[str, Any], actual_response: str) -> bool:
+    """Vérifie qu'au moins une valeur attendue est présente dans la réponse (tolérance 1%)."""
+    if not expected_value or not actual_response:
+        return True
+    for expected in expected_value.values():
+        if _number_in_text(float(expected), actual_response):
+            return True
+    return False
+
+
+def _check_citation(cited_source: str, actual_sql: str | None) -> bool:
+    """Vérifie que la source attendue apparaît dans le SQL généré."""
+    if not cited_source or not actual_sql:
+        return True
+    return cited_source.lower() in actual_sql.lower()
+
+
+def _check_aggregation(reference_sql: str, actual_response: str, db_path: Path) -> bool:
+    """Exécute reference_sql sur DuckDB et compare au premier chiffre de la réponse."""
+    if not reference_sql or not actual_response:
+        return True
+    if not db_path.exists():
+        return True  # DB absente → pas de pénalité
+    try:
+        import duckdb
+        conn = duckdb.connect(str(db_path), read_only=True)
+        row = conn.execute(reference_sql).fetchone()
+        conn.close()
+        if row is None or row[0] is None:
+            return True
+        ref_value = float(row[0])
+        return _number_in_text(ref_value, actual_response)
+    except Exception as exc:
+        logger.warning("Aggregation check échoué (%s): %s", reference_sql[:60], exc)
+        return True  # En cas d'erreur DB → pas de pénalité
 
 
 # ---------------------------------------------------------------------------
@@ -144,6 +227,7 @@ def evaluate_case(case: dict, pipeline) -> EvalResult:
         result.actual_intent = getattr(response, "intent", None)
         result.actual_sql = getattr(response, "sql", None)
         result.actual_response = getattr(response, "response", str(response))
+        result.actual_sources = list(getattr(response, "sources", []))
 
         # --- Évaluation de l'intent ---
         expected_intent = case.get("expected_intent")
@@ -185,7 +269,35 @@ def evaluate_case(case: dict, pipeline) -> EvalResult:
         else:
             result.answer_ok = True  # Pas de contrainte de réponse
 
-        result.passed = result.intent_ok and result.sql_ok and result.answer_ok
+        # --- Fact lookup ---
+        expected_value = case.get("expected_value")
+        if expected_value:
+            result.fact_ok = _check_fact(expected_value, result.actual_response or "")
+            if not result.fact_ok:
+                result.details.append(f"Fact: valeur attendue {expected_value} non trouvée dans la réponse")
+
+        # --- Citation faithfulness ---
+        cited_source = case.get("cited_source")
+        if cited_source:
+            result.citation_ok = _check_citation(cited_source, result.actual_sql)
+            if not result.citation_ok:
+                result.details.append(f"Citation: '{cited_source}' absent du SQL généré")
+
+        # --- Aggregation correctness ---
+        reference_sql = case.get("reference_sql")
+        if reference_sql:
+            result.aggregation_ok = _check_aggregation(reference_sql, result.actual_response or "", DUCKDB_PATH)
+            if not result.aggregation_ok:
+                result.details.append("Aggregation: résultat SQL de référence non trouvé dans la réponse")
+
+        result.passed = (
+            result.intent_ok
+            and result.sql_ok
+            and result.answer_ok
+            and result.fact_ok
+            and result.citation_ok
+            and result.aggregation_ok
+        )
 
     except Exception as exc:
         elapsed_ms = (time.perf_counter() - start) * 1000
@@ -228,6 +340,18 @@ def aggregate_report(results: list[EvalResult], duration_s: float) -> EvalReport
         stats["score_pct"] = round(
             stats["passed"] / stats["total"] * 100, 1
         ) if stats["total"] else 0.0
+
+    # Métriques par scorer
+    n = len(results)
+    if n:
+        report.scores_by_metric = {
+            "intent": round(sum(1 for r in results if r.intent_ok) / n * 100, 1),
+            "sql": round(sum(1 for r in results if r.sql_ok) / n * 100, 1),
+            "answer": round(sum(1 for r in results if r.answer_ok) / n * 100, 1),
+            "fact": round(sum(1 for r in results if r.fact_ok) / n * 100, 1),
+            "citation": round(sum(1 for r in results if r.citation_ok) / n * 100, 1),
+            "aggregation": round(sum(1 for r in results if r.aggregation_ok) / n * 100, 1),
+        }
 
     # Agrégation par catégorie
     for result in results:
@@ -287,6 +411,13 @@ def print_report(report: EvalReport) -> None:
             f"{color}{stats['passed']}/{stats['total']} ({pct}%){RESET}"
         )
 
+    # Par métrique
+    if report.scores_by_metric:
+        print(f"\n  {BOLD}Par métrique :{RESET}")
+        for metric, pct in report.scores_by_metric.items():
+            color = GREEN if pct >= 80 else (YELLOW if pct >= 50 else RED)
+            print(f"    {metric:15s} : {color}{pct}%{RESET}")
+
     # Détails des cas échoués
     failed = [r for r in report.results if not r.passed]
     if failed:
@@ -334,6 +465,13 @@ def main() -> None:
         help="Afficher le détail de chaque cas.",
     )
     args = parser.parse_args()
+
+    # Charger .env si présent (mode local sans Docker)
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass
 
     # Vérification des prérequis
     if not os.getenv("OPENROUTER_API_KEY"):

@@ -1,5 +1,6 @@
 """Factory pour le client LLM via OpenRouter (API compatible OpenAI)."""
 
+import contextvars
 import logging
 import os
 
@@ -11,6 +12,24 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 # Modèle par défaut (format OpenRouter : provider/model-name)
 DEFAULT_MODEL = os.getenv("LLM_MODEL", "anthropic/claude-sonnet-4-5")
+
+# Compteur de tokens par requête (async-safe via ContextVar)
+_token_counter: contextvars.ContextVar[dict[str, int] | None] = contextvars.ContextVar(
+    "token_counter", default=None
+)
+
+
+def init_token_counter() -> dict[str, int]:
+    """Initialise un compteur de tokens pour la requête courante."""
+    counter: dict[str, int] = {"input_tokens": 0, "output_tokens": 0}
+    _token_counter.set(counter)
+    return counter
+
+
+def get_token_usage() -> dict[str, int]:
+    """Retourne les tokens accumulés pour la requête courante."""
+    counter = _token_counter.get(None)
+    return dict(counter) if counter else {}
 
 
 def get_client() -> OpenAI:
@@ -33,6 +52,7 @@ def chat(
     system: str,
     user: str,
     max_tokens: int = 1024,
+    temperature: float | None = None,
 ) -> str:
     """Appel LLM simplifié : system + user → texte réponse.
 
@@ -42,6 +62,7 @@ def chat(
         system: Prompt système.
         user: Message utilisateur.
         max_tokens: Nombre max de tokens dans la réponse.
+        temperature: Température (None = défaut modèle, 0 = déterministe).
 
     Returns:
         Contenu texte de la réponse.
@@ -49,12 +70,20 @@ def chat(
     Raises:
         openai.APIError: En cas d'erreur API.
     """
-    response = client.chat.completions.create(
-        model=model,
-        max_tokens=max_tokens,
-        messages=[
+    kwargs: dict = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "messages": [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ],
-    )
+    }
+    if temperature is not None:
+        kwargs["temperature"] = temperature
+    response = client.chat.completions.create(**kwargs)
+    if response.usage:
+        counter = _token_counter.get(None)
+        if counter is not None:
+            counter["input_tokens"] += response.usage.prompt_tokens or 0
+            counter["output_tokens"] += response.usage.completion_tokens or 0
     return response.choices[0].message.content or ""

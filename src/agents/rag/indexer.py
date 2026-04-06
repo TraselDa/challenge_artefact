@@ -36,9 +36,33 @@ def build_index(
 
     client = chromadb.PersistentClient(path=str(chroma_dir))
 
+    # Lire le hash du PDF depuis .data_version si disponible
+    pdf_hash: str | None = None
+    db_path_obj = Path(db_path)
+    version_file = db_path_obj.parent / ".data_version"
+    if version_file.exists():
+        try:
+            import json as _json
+            version_info = _json.loads(version_file.read_text(encoding="utf-8"))
+            pdf_hash = version_info.get("pdf_hash")
+        except Exception:
+            pass
+
     # Vérifier si l'index existe déjà
     existing = [c.name for c in client.list_collections()]
     if COLLECTION_NAME in existing and not force_rebuild:
+        # Vérifier la cohérence du hash
+        try:
+            existing_col = client.get_collection(COLLECTION_NAME)
+            stored_hash = existing_col.metadata.get("pdf_hash") if existing_col.metadata else None
+            if pdf_hash and stored_hash and stored_hash != pdf_hash:
+                logger.warning(
+                    "Hash mismatch: index ChromaDB créé avec hash %s... mais .data_version a %s... "
+                    "Relancez 'make ingest' pour reconstruire l'index.",
+                    stored_hash[:12], pdf_hash[:12],
+                )
+        except Exception:
+            pass
         logger.info(f"Index ChromaDB existant chargé depuis {chroma_path}")
         ef = embedding_functions.SentenceTransformerEmbeddingFunction(
             model_name=EMBEDDING_MODEL
@@ -57,7 +81,7 @@ def build_index(
     collection = client.create_collection(
         COLLECTION_NAME,
         embedding_function=ef,
-        metadata={"hnsw:space": "cosine"},
+        metadata={"hnsw:space": "cosine", "pdf_hash": pdf_hash or ""},
     )
 
     # Charger les données depuis DuckDB

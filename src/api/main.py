@@ -41,6 +41,25 @@ async def lifespan(app: FastAPI):  # type: ignore[type-arg]
     app_state["session_store"] = {}  # {session_id: {"pending_clarification": ..., "entity_choices": ...}}
 
     logger.info("Tous les agents sont initialisés.")
+
+    # Afficher la version du dataset au démarrage
+    import json as _json
+    from pathlib import Path as _Path
+    _version_file = _Path(db_path).parent / ".data_version"
+    if _version_file.exists():
+        try:
+            _v = _json.loads(_version_file.read_text(encoding="utf-8"))
+            logger.info(
+                "Dataset version: pdf_hash=%s..., ingest=%s, model=%s",
+                _v.get("pdf_hash", "?")[:12],
+                _v.get("ingest_timestamp", "?")[:19],
+                _v.get("embedding_model", "?"),
+            )
+        except Exception:
+            pass
+    else:
+        logger.warning("Pas de fichier .data_version — lancez 'make ingest' pour initialiser.")
+
     yield
 
     app_state.clear()

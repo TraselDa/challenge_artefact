@@ -10,7 +10,6 @@ Couvre :
 
 from pathlib import Path
 
-import pandas as pd
 import pytest
 
 from src.ingestion.cleaner import (
@@ -59,7 +58,6 @@ class TestParseNumber:
 
     def test_nan_value(self) -> None:
         """float('nan') doit retourner None."""
-        import math
 
         result = parse_number(float("nan"))
         assert result is None
@@ -110,7 +108,6 @@ class TestParsePercentage:
         assert parse_percentage("   ") is None
 
     def test_nan_value(self) -> None:
-        import math
 
         result = parse_percentage(float("nan"))
         assert result is None
@@ -152,7 +149,6 @@ class TestParseElu:
         assert parse_elu("   ") is False
 
     def test_nan_is_false(self) -> None:
-        import math
 
         assert parse_elu(float("nan")) is False
 

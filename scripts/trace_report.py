@@ -54,7 +54,7 @@ def main() -> None:
     traces = load_traces(intent_filter=args.intent)
 
     if not traces:
-        msg = f"Aucune trace enregistrée"
+        msg = "Aucune trace enregistrée"
         if args.intent:
             msg += f" pour intent={args.intent!r}"
         print(f"\n{YELLOW}{msg}.{RESET}\n")

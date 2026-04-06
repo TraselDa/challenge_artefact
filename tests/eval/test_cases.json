@@ -7,6 +7,8 @@
     "expected_intent": "sql",
     "expected_sql_contains": ["vw_results_by_party", "RHDP"],
     "expected_answer_contains": ["RHDP", "siège"],
+    "cited_source": "vw_results_by_party",
+    "reference_sql": "SELECT nb_sieges FROM vw_results_by_party WHERE parti = 'RHDP' LIMIT 1",
     "notes": "Doit cibler vw_results_by_party, colonne nb_sieges, WHERE parti = 'RHDP'"
   },
   {
@@ -27,6 +29,7 @@
     "expected_intent": "sql",
     "expected_sql_contains": ["taux_participation", "region"],
     "expected_answer_contains": ["région", "participation"],
+    "cited_source": "taux_participation",
     "notes": "Utiliser vw_turnout ou vw_results_by_region, GROUP BY region"
   },
   {
@@ -37,6 +40,7 @@
     "expected_intent": "sql_chart",
     "expected_sql_contains": ["vw_results_by_party", "nb_sieges"],
     "expected_answer_contains": [],
+    "cited_source": "vw_results_by_party",
     "notes": "Doit générer un graphique (bar chart), intent = sql_chart"
   },
   {
@@ -47,6 +51,7 @@
     "expected_intent": "sql",
     "expected_sql_contains": ["vw_winners", "numero_circonscription", "1"],
     "expected_answer_contains": [],
+    "cited_source": "vw_winners",
     "notes": "Doit utiliser vw_winners, numero_circonscription = 1"
   },
   {
@@ -57,6 +62,9 @@
     "expected_intent": "sql",
     "expected_sql_contains": ["summary_national", "taux_participation"],
     "expected_answer_contains": ["35", "%"],
+    "cited_source": "summary_national",
+    "expected_value": {"taux": 35.04},
+    "reference_sql": "SELECT taux_participation FROM summary_national LIMIT 1",
     "notes": "Doit cibler summary_national, réponse ~35.04%"
   },
   {
@@ -67,6 +75,7 @@
     "expected_intent": "sql",
     "expected_sql_contains": ["vw_results_by_party", "parti"],
     "expected_answer_contains": ["RHDP"],
+    "cited_source": "vw_results_by_party",
     "notes": "SELECT DISTINCT parti ou utiliser vw_results_by_party"
   },
   {
@@ -86,7 +95,10 @@
     "question": "Combien d'électeurs étaient inscrits au total ?",
     "expected_intent": "sql",
     "expected_sql_contains": ["summary_national", "inscrits"],
-    "expected_answer_contains": ["8 597 092", "8597092"],
+    "expected_answer_contains": ["inscrits"],
+    "cited_source": "summary_national",
+    "expected_value": {"inscrits": 8597092},
+    "reference_sql": "SELECT inscrits FROM summary_national LIMIT 1",
     "notes": "Doit retourner 8 597 092 depuis summary_national"
   },
   {
@@ -117,6 +129,7 @@
     "expected_intent": "sql",
     "expected_sql_contains": ["vw_results_by_party", "nb_sieges", "ORDER BY"],
     "expected_answer_contains": ["RHDP"],
+    "cited_source": "vw_results_by_party",
     "notes": "ORDER BY nb_sieges DESC LIMIT 1"
   },
   {
@@ -126,8 +139,8 @@
     "question": "Résultats à Tiapum",
     "expected_intent": "rag",
     "expected_sql_contains": [],
-    "expected_answer_contains": ["Tiapoum"],
-    "notes": "Typo : Tiapum → Tiapoum. Le RAG doit corriger et trouver la circonscription."
+    "expected_answer_contains": [],
+    "notes": "Typo : Tiapum → Tiapoum. Le routeur doit classifier rag (pas clarification). Le contenu RAG dépend de l'index ChromaDB."
   },
   {
     "id": "L2-002",

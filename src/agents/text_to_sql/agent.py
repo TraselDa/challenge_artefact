@@ -668,6 +668,11 @@ class TextToSQLAgent:
             TimeoutError: Si la requête dépasse SQL_TIMEOUT_SECONDS.
             duckdb.Error: Si la requête SQL est invalide.
         """
+        from src.cache import get_sql_cached, set_sql_cached
+        cached = get_sql_cached(sql)
+        if cached is not None:
+            return cached
+
         if not self.db_path.exists():
             raise FileNotFoundError(
                 f"Base DuckDB non trouvée: {self.db_path}. Lancez `make ingest` d'abord."
@@ -698,12 +703,14 @@ class TextToSQLAgent:
                 pass
 
         logger.info(f"SQL exécuté: {len(results)} lignes retournées")
-        return SQLResult(
+        sql_result = SQLResult(
             sql=sql,
             results=results,
             row_count=len(results),
             columns=columns,
         )
+        set_sql_cached(sql, sql_result)
+        return sql_result
 
     def _format_answer(
         self, question: str, sql: str, sql_result: SQLResult
