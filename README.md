@@ -307,14 +307,14 @@ Copier `.env.example` vers `.env` et remplir :
 | Variable | Description | Défaut |
 |----------|-------------|--------|
 | `OPENROUTER_API_KEY` | Clé API OpenRouter (obligatoire) | — |
-| `LLM_MODEL` | Modèle utilisé | `anthropic/claude-sonnet-4-5` |
+| `LLM_MODEL` | Modèle utilisé | `anthropic/claude-3-haiku` |
 | `DUCKDB_PATH` | Chemin vers la base DuckDB | `data/processed/edan.duckdb` |
 | `CHROMA_PERSIST_DIR` | Répertoire ChromaDB | `data/processed/chroma` |
 | `FASTAPI_PORT` | Port FastAPI | `8090` |
 | `SQL_TIMEOUT_SECONDS` | Timeout requêtes SQL | `10` |
 | `SQL_MAX_LIMIT` | LIMIT maximum autorisé | `1000` |
 | `SQL_DEFAULT_LIMIT` | LIMIT ajouté si absent | `100` |
-| `ENABLE_TRACING` | Activer le tracing JSONL dans `data/traces/` (`true`/`1`/`yes`) | `false` |
+| `ENABLE_TRACING` | Activer le tracing JSONL dans `data/traces/` (`true`/`1`/`yes`) | `true` |
 | `TRACES_DIR` | Répertoire d'écriture des traces | `data/traces` |
 
 ---

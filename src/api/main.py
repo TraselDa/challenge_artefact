@@ -2,6 +2,7 @@
 
 import logging
 import os
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -20,8 +21,8 @@ logger = logging.getLogger(__name__)
 app_state: dict[str, Any] = {}
 
 
-@asynccontextmanager  # type: ignore[arg-type]
-async def lifespan(app: FastAPI):  # type: ignore[type-arg]
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Initialise les agents au démarrage, libère les ressources à l'arrêt."""
     from src.agents.clarifier import Clarifier
     from src.agents.rag.agent import RAGAgent

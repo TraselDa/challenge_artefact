@@ -46,7 +46,7 @@ class Pipeline:
         from src.agents.router import IntentRouter
         from src.agents.text_to_sql.agent import TextToSQLAgent
 
-        _model = model or os.getenv("LLM_MODEL", "anthropic/claude-sonnet-4-5")
+        _model: str = model if model is not None else os.getenv("LLM_MODEL", "anthropic/claude-sonnet-4-5")
 
         self.router = IntentRouter(model=_model)
         self.sql_agent = TextToSQLAgent(db_path=db_path, model=_model)
@@ -112,9 +112,9 @@ class Pipeline:
             )
 
         # RAG (et fallback pour tout autre intent)
-        result = self.rag_agent.answer(question, routing.normalized_query)
+        rag_result = self.rag_agent.answer(question, routing.normalized_query)
         return PipelineResult(
             intent=intent.value,
-            response=result.answer,
-            sources=result.sources,
+            response=rag_result.answer,
+            sources=rag_result.sources,
         )

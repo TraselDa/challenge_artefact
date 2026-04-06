@@ -2,7 +2,7 @@
 
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ def search(
     from src.cache import get_retrieval_cached, set_retrieval_cached
     cached = get_retrieval_cached(query, n_results)
     if cached is not None:
-        return cached
+        return cast(list[RAGResult], cached)
 
     try:
         results = collection.query(

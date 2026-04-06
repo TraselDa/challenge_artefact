@@ -3,6 +3,7 @@
 import contextvars
 import logging
 import os
+from typing import Any
 
 from openai import OpenAI
 
@@ -70,7 +71,7 @@ def chat(
     Raises:
         openai.APIError: En cas d'erreur API.
     """
-    kwargs: dict = {
+    kwargs: dict[str, Any] = {
         "model": model,
         "max_tokens": max_tokens,
         "messages": [

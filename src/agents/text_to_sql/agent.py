@@ -245,10 +245,10 @@ class TextToSQLAgent:
 
         # 5b. Retry avec fuzzy fix si 0 résultats
         if sql_result.row_count == 0:
-            fixed_sql = self._fuzzy_fix_sql(sql_validated)
-            if fixed_sql:
+            fuzzy_sql = self._fuzzy_fix_sql(sql_validated)
+            if fuzzy_sql:
                 try:
-                    fixed_sql_validated = validate_sql(fixed_sql)
+                    fixed_sql_validated = validate_sql(fuzzy_sql)
                     sql_result_fixed = self._execute_sql(fixed_sql_validated)
                     if sql_result_fixed.row_count > 0:
                         logger.info("Fuzzy retry réussi, utilisation des résultats corrigés")
@@ -646,12 +646,12 @@ class TextToSQLAgent:
 
         raw = json_match.group()
         try:
-            return json.loads(raw)
+            return json.loads(raw)  # type: ignore[no-any-return]
         except json.JSONDecodeError:
             # LLM sometimes embeds literal newlines in string values → escape them
             fixed = _fix_json_newlines(raw)
             try:
-                return json.loads(fixed)
+                return json.loads(fixed)  # type: ignore[no-any-return]
             except json.JSONDecodeError as e:
                 raise ValueError(f"JSON invalide dans la réponse LLM: {e}\nTexte: {text}") from e
 
@@ -671,7 +671,7 @@ class TextToSQLAgent:
         from src.cache import get_sql_cached, set_sql_cached
         cached = get_sql_cached(sql)
         if cached is not None:
-            return cached
+            return cached  # type: ignore[no-any-return]
 
         if not self.db_path.exists():
             raise FileNotFoundError(

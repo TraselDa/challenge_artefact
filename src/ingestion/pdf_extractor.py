@@ -175,9 +175,9 @@ def _parse_total_row(row: list[str]) -> dict[str, Any]:
             if v is not None:
                 result["votants"] = v
         if len(row) > 6:
-            v = to_float(row[6])
-            if v is not None:
-                result["taux_participation"] = v
+            vf = to_float(row[6])
+            if vf is not None:
+                result["taux_participation"] = vf
         if len(row) > 7:
             v = to_int(row[7])
             if v is not None:
@@ -191,9 +191,9 @@ def _parse_total_row(row: list[str]) -> dict[str, Any]:
             if v is not None:
                 result["bulletins_blancs"] = v
         if len(row) > 10:
-            v = to_float(row[10])
-            if v is not None:
-                result["bulletins_blancs_pct"] = v
+            vf = to_float(row[10])
+            if vf is not None:
+                result["bulletins_blancs_pct"] = vf
         if len(row) > 13:
             v = to_int(row[13])
             if v is not None:

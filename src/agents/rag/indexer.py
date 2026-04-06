@@ -64,7 +64,7 @@ def build_index(
         except Exception:
             pass
         logger.info(f"Index ChromaDB existant chargé depuis {chroma_path}")
-        ef = embedding_functions.SentenceTransformerEmbeddingFunction(
+        ef = embedding_functions.SentenceTransformerEmbeddingFunction(  # type: ignore[attr-defined]
             model_name=EMBEDDING_MODEL
         )
         return client.get_collection(COLLECTION_NAME, embedding_function=ef)
@@ -75,7 +75,7 @@ def build_index(
     if COLLECTION_NAME in existing:
         client.delete_collection(COLLECTION_NAME)
 
-    ef = embedding_functions.SentenceTransformerEmbeddingFunction(
+    ef = embedding_functions.SentenceTransformerEmbeddingFunction(  # type: ignore[attr-defined]
         model_name=EMBEDDING_MODEL
     )
     collection = client.create_collection(
@@ -115,7 +115,7 @@ def build_index(
         collection.add(
             ids=ids[start:end],
             documents=documents[start:end],
-            metadatas=metadatas[start:end],
+            metadatas=metadatas[start:end],  # type: ignore[arg-type]
         )
         logger.debug(f"Indexé {end}/{len(documents)} documents")
 
@@ -182,7 +182,7 @@ def get_or_create_collection(client: Any) -> Any:
     """
     from chromadb.utils import embedding_functions
 
-    ef = embedding_functions.SentenceTransformerEmbeddingFunction(
+    ef = embedding_functions.SentenceTransformerEmbeddingFunction(  # type: ignore[attr-defined]
         model_name=EMBEDDING_MODEL
     )
     existing = [c.name for c in client.list_collections()]

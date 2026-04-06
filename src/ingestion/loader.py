@@ -127,9 +127,9 @@ def load_results(conn: duckdb.DuckDBPyConnection, df: pd.DataFrame) -> int:
 
     conn.execute("INSERT INTO results SELECT * FROM df_insert")
 
-    row_count = conn.execute("SELECT COUNT(*) FROM results").fetchone()[0]  # type: ignore
+    row_count = conn.execute("SELECT COUNT(*) FROM results").fetchone()[0]  # type: ignore[index]
     logger.info(f"{row_count} lignes insérées dans results")
-    return row_count
+    return int(row_count)
 
 
 def load_summary_national(

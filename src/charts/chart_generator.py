@@ -203,7 +203,7 @@ def chart_to_json(fig: go.Figure) -> str:
     Returns:
         JSON string.
     """
-    return fig.to_json()
+    return str(fig.to_json())
 
 
 def chart_from_json(json_str: str) -> go.Figure:

@@ -4,7 +4,7 @@ import logging
 import os
 import uuid
 
-import requests
+import requests  # type: ignore[import-untyped]
 import streamlit as st
 
 logger = logging.getLogger(__name__)
@@ -89,14 +89,14 @@ def send_question(question: str, session_id: str) -> dict:  # type: ignore[type-
         timeout=90,
     )
     resp.raise_for_status()
-    return resp.json()  # type: ignore[return-value]
+    return resp.json()  # type: ignore[no-any-return]
 
 
 def check_api_health() -> bool:
     """Vérifie que l'API FastAPI est accessible."""
     try:
         resp = requests.get(f"{FASTAPI_URL}/api/health", timeout=5)
-        return resp.status_code == 200
+        return bool(resp.status_code == 200)
     except Exception:
         return False
 
